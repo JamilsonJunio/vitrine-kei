@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Kei Sampaio - Vitrine Digital</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- Carrinho Fixo -->
+  <div class="cart-btn-fixed" onclick="toggleCartModal(true)">
+    <span>🛒 Carrinho</span>
+    <span class="cart-count" id="cart-count">0</span>
+  </div>
+
+  <header>
+    <h1 class="logo">Kei Sampaio</h1>
+    <p class="welcome-text">Arquivos digitais exclusivos para transformar suas ideias em mimos apaixonantes. ✨</p>
+  </header>
+
+  <nav class="categories-tabs" id="categories-tabs">
+    <div class="tab active" onclick="filterByCategory('all')">Todos</div>
+  </nav>
+
+  <main class="products-container">
+    <div class="products-grid" id="products-grid">
+      <!-- Injetado via script.js -->
+    </div>
+  </main>
+
+  <!-- MODAL: CARRINHO -->
+  <div class="modal-overlay" id="cart-modal">
+    <div class="modal-content">
+      <span style="position:absolute; top:15px; right:15px; cursor:pointer;" onclick="toggleCartModal(false)">✕</span>
+      <h2 style="font-family:'Outfit'; color:var(--primary); margin-bottom:1.5rem;">🛍️ Meu Carrinho</h2>
+      
+      <div id="cart-items" style="max-height: 50vh; overflow-y: auto;"></div>
+      <div id="cart-empty" class="empty-cart-msg">Seu carrinho está vazio 🌸</div>
+      
+      <div id="cart-footer" style="margin-top:20px; border-top:1px solid #f8f1ee; padding-top:15px; display:none;">
+        <div style="display:flex; justify-content:space-between; font-weight:800; font-size:1.2rem; margin-bottom:20px; color:var(--text);">
+          <span>Total:</span>
+          <span id="cart-total-value">R$ 0,00</span>
+        </div>
+        <div style="margin-bottom:15px;">
+          <label style="font-size:0.85rem; font-weight:700; color:#444;">Seu Nome:</label>
+          <input type="text" id="user-name" placeholder="Como podemos te chamar?" style="width:100%; padding:15px; border-radius:18px; border:1px solid #efefef; background:#fdfdfd; margin-top:5px; outline:none; font-family:inherit;">
+        </div>
+        <button class="btn-finish" onclick="proceedToPayment()">🚀 Finalizar Pedido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PIX -->
+  <div class="modal-overlay" id="pix-modal">
+    <div class="modal-content" style="text-align:center;">
+      <span style="position:absolute; top:15px; right:15px; cursor:pointer;" onclick="togglePixModal(false)">✕</span>
+      <h2 style="font-family:'Outfit'; color:var(--primary); margin-bottom:10px;">📲 Pagamento PIX</h2>
+      <p style="font-size:0.8rem; color:#888; margin-bottom:15px;">Leia o QR Code ou copie a chave aleatória:</p>
+      
+      <div id="qrcode" style="margin:0 auto; width:180px; height:180px; padding:10px; border:1px solid #eee; border-radius:15px; background:white;"></div>
+      
+      <div style="background:#fdf0e8; padding:12px; border-radius:10px; font-family:monospace; font-size:0.75rem; word-break:break-all; margin:15px 0; border:1px dashed var(--primary);" id="pix-key-display">
+        1150f286-83b6-4bba-a2ef-19ddf94cf48e
+      </div>
+      
+      <button class="btn-add" style="background:var(--primary); color:white; margin-bottom:20px;" onclick="copyPixKey()" id="btn-copy">📋 Copiar Chave PIX</button>
+      
+      <div style="border-top:1px solid #eee; padding-top:15px;">
+        <p style="font-size:0.8rem; color:#444; margin-bottom:10px;">Enviou o pagamento? Clique abaixo para liberar os arquivos! 💖</p>
+        <button class="btn-add" style="background:#25d366; color:white;" onclick="sendWhatsAppReceipt()">💬 Enviar comprovante no WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZOOM MODAL (Multi-Image Support) -->
+  <div class="modal-overlay" id="image-modal" style="background:rgba(0,0,0,0.9);">
+    <span style="position:absolute; top:20px; right:20px; color:white; font-size:24px; cursor:pointer; z-index:1001;" onclick="closeImageZoom()">✕</span>
+    <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; position:relative;">
+      <button onclick="prevZoomImg()" style="position:absolute; left:10px; background:none; border:none; color:white; font-size:30px; cursor:pointer; z-index:1002;">❮</button>
+      <img id="zoomed-image" style="max-width:95%; max-height:95%; object-fit:contain; border-radius:8px;" src="" alt="">
+      <button onclick="nextZoomImg()" style="position:absolute; right:10px; background:none; border:none; color:white; font-size:30px; cursor:pointer; z-index:1002;">❯</button>
+    </div>
+  </div>
+
+  <script src="js/script.js"></script>
+</body>
+</html>

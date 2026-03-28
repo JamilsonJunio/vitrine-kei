@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Admin - Kei Sampaio</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { background: #fdf0e8; padding: 15px; }
+    .admin-container { background: white; max-width: 900px; margin: 0 auto; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    .admin-tabs { display: flex; gap: 10px; margin-bottom: 30px; border-bottom: 2px solid #f8f8f8; overflow-x: auto; scrollbar-width: none; }
+    .admin-tab { padding: 10px 20px; font-weight: 700; color: #aaa; cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; }
+    .admin-tab.active { color: var(--primary); border-color: var(--primary); }
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
+
+    /* Form Styles */
+    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-input { padding: 10px; border-radius: 12px; border: 1px solid #efefef; background: #fafafa; font-family: inherit; }
+
+    /* Stats Cards */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
+    .stat-card { background: #fdfaf8; padding: 15px; border-radius: 15px; text-align: center; border: 1px solid #fbe6da; }
+    .stat-val { display: block; font-size: 1.2rem; font-weight: 800; color: var(--primary); }
+    .stat-label { font-size: 0.65rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+
+    /* Actions */
+    .btn-sync { background: #1976d2; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    
+    @media (max-width: 480px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="admin-container">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+      <h1 style="font-family:'Outfit'; color:var(--primary); font-size:1.5rem;">💎 Painel Admin</h1>
+      <button class="btn-sync" onclick="syncAll()">🚀 Sincronizar Loja</button>
+    </div>
+
+    <!-- Navegação -->
+    <div class="admin-tabs">
+      <div class="admin-tab active" data-target="vendas">💰 Vendas</div>
+      <div class="admin-tab" data-target="produtos">🛍️ Produtos</div>
+      <div class="admin-tab" data-target="config">⚙️ Configurações</div>
+    </div>
+
+    <!-- SEÇÃO: VENDAS -->
+    <section class="admin-section active" id="vendas">
+      <div class="stats-row">
+        <div class="stat-card"><span class="stat-val" id="stat-total-day">R$ 0,00</span><span class="stat-label">Hoje</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-count-day">0</span><span class="stat-label">Pedidos</span></div>
+        <div class="stat-card"><span class="stat-val" id="stat-total-month">R$ 0,00</span><span class="stat-label">Mês</span></div>
+      </div>
+      <h3 style="margin-bottom:15px; font-size:1rem;">Lista de Pedidos</h3>
+      <table class="admin-table">
+        <thead><tr><th>Data</th><th>Cliente</th><th>Total</th></tr></thead>
+        <tbody id="sales-log"></tbody>
+      </table>
+    </section>
+
+    <!-- SEÇÃO: PRODUTOS -->
+    <section class="admin-section" id="produtos">
+      <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+        <h3 style="font-size:1rem;">Produtos na Vitrine</h3>
+        <button class="tab active" style="padding:5px 15px;" onclick="openAddProduct()">+ Novo</button>
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>Foto</th><th>Título</th><th>Preço</th><th>Ações</th></tr></thead>
+        <tbody id="product-list-admin"></tbody>
+      </table>
+    </section>
+
+    <!-- SEÇÃO: CONFIG -->
+    <section class="admin-section" id="config">
+      <h3 style="margin-bottom:15px; font-size:1rem;">Configurações Avançadas</h3>
+      <div class="admin-card">
+        <label style="font-size:0.8rem; font-weight:700; color:#555;">Sua Chave API ImgBB (Nuvem)</label>
+        <p style="font-size:0.75rem; color:#888; margin-bottom:10px;">Pegue grátis em <a href="https://imgbb.com" target="_blank">imgbb.com</a> para ter fotos ilimitadas.</p>
+        <input type="text" id="admin-imgbb-key" class="form-input" placeholder="Cole sua chave aqui...">
+        <button class="btn-add" style="background:var(--primary); color:white; margin-top:10px;" onclick="saveConfig()">Salvar Configurações</button>
+      </div>
+      <div class="admin-card">
+        <h4 style="font-size:0.8rem; margin-bottom:10px;">Gestão de Categorias</h4>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+           <input type="text" id="new-cat-name" class="form-input" placeholder="Nova categoria..." style="flex:1">
+           <button class="btn-add" style="width:auto; padding:10px; background:var(--primary); color:white;" onclick="addCategory()">Add</button>
+        </div>
+        <div id="category-list-admin" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- MODAL: PRODUTO -->
+  <div class="modal-overlay" id="product-modal-admin">
+    <div class="modal-content" style="max-width:550px;">
+      <span style="position:absolute; top:15px; right:15px; cursor:pointer;" onclick="toggleProductModal(false)">✕</span>
+      <h2 id="modal-title-admin" style="font-family:'Outfit'; color:var(--primary); margin-bottom:1.5rem;">Gerenciar Produto</h2>
+      
+      <form id="product-form-admin" onsubmit="saveProduct(event)">
+        <input type="hidden" id="admin-p-id">
+        <div class="form-grid">
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Título</label><input type="text" id="admin-p-title" class="form-input" required>
+          </div>
+          <div class="form-group"><label>Preço Atual</label><input type="number" step="0.01" id="admin-p-price" class="form-input" required></div>
+          <div class="form-group"><label>Preço Antigo</label><input type="number" step="0.01" id="admin-p-price-old" class="form-input"></div>
+          <div class="form-group"><label>Categoria</label><select id="admin-p-category" class="form-input"></select></div>
+          <div class="form-group">
+            <label>Fotos (Máx 5)</label>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="text" id="admin-p-img" class="form-input" placeholder="URL ou deixe em branco" style="display:none;">
+              <button type="button" class="tab" style="width:100%; border-style:dashed;" onclick="document.getElementById('admin-file-picker').click()">📷 Selecionar Fotos</button>
+              <input type="file" id="admin-file-picker" style="display:none;" multiple accept="image/*" onchange="previewImagesAdmin(event)">
+            </div>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <div id="admin-img-previews-container" class="img-grid-admin"></div>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;"><label>Descrição</label><textarea id="admin-p-desc" class="form-input" rows="3"></textarea></div>
+        </div>
+        <button type="submit" class="btn-add" style="background:var(--primary); color:white; padding:15px; font-size:1rem; margin-top:15px;">Salvar no Servidor ✨</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
