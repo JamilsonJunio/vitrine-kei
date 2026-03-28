@@ -24,19 +24,25 @@ function openDB() {
 
 async function dbGet(store, key) {
   const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(store, 'readonly');
-    const req = tx.objectStore(store).get(key);
-    req.onsuccess = () => resolve(req.result);
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = (e) => reject(e.target.error);
+    } catch (e) { reject(e); }
   });
 }
 
 async function dbSet(store, key, val) {
   const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction(store, 'readwrite');
-    tx.objectStore(store).put(val, key);
-    tx.oncomplete = () => resolve();
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(val, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e.target.error);
+    } catch (e) { reject(e); }
   });
 }
 
@@ -195,14 +201,19 @@ async function saveProduct(e) {
     products.push(pData);
   }
 
-  await dbSet('products', 'list', products);
-  renderProductsAdmin();
-  updateMemoryMeter();
-  toggleProductModal(false);
+  try {
+    await dbSet('products', 'list', products);
+    renderProductsAdmin();
+    updateMemoryMeter();
+    toggleProductModal(false);
+    alert("Pronto! Loja atualizada com sucesso! 💎");
+  } catch (err) {
+    console.error("Erro ao salvar:", err);
+    alert("❌ Erro ao salvar o produto no banco de dados. Tente novamente ou use o botão de Reset nas configurações.");
+  }
   
   btn.innerText = "Salvar no Servidor ✨";
   btn.disabled = false;
-  alert("Pronto! Loja atualizada com sucesso! 💎");
 }
 
 async function uploadToImgBB(base64) {
