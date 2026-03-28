@@ -128,7 +128,8 @@ async function saveProduct(e) {
     toggleProductModal(false);
     alert("Pronto! Loja atualizada com sucesso! 💎");
   } catch (err) {
-    alert("ERRO: Sua memória local está cheia. Por favor, remova produtos antigos ou adicione a chave ImgBB nas configurações.");
+    console.error("Storage Full Error:", err);
+    alert("⚠️ MEMÓRIA CHEIA: Você atingiu o limite de armazenamento do seu navegador para este site. \n\nSOLUÇÃO:\n1. Use o link oficial .pages.dev (ele está limpo!)\n2. Remova produtos antigos.\n3. Ou adicione a chave ImgBB nas configurações.");
   }
   
   btn.innerText = "Salvar no Servidor ✨";
@@ -163,10 +164,12 @@ function previewImagesAdmin(e) {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = 800; canvas.height = 800; // Quadrada Kei Sampaio
+        // Otimização Kei Sampaio: 600x600 para máxima leveza e economia de espaço
+        canvas.width = 600; canvas.height = 600; 
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 800, 800);
-        currentImages.push(canvas.toDataURL('image/jpeg', 0.8));
+        ctx.drawImage(img, 0, 0, 600, 600);
+        // Qualidade 0.6 para equilibrar nitidez e tamanho do arquivo
+        currentImages.push(canvas.toDataURL('image/jpeg', 0.6));
         renderPreviews();
       }
     };
@@ -244,4 +247,11 @@ function deleteCategory(name) {
 
 function syncAll() {
   alert("🚀 Loja Sincronizada com Cloudflare Pages!\n\nSeus dados estão seguros e o site oficial é:\nhttps://kei-sampaio-loja.pages.dev");
+}
+
+function clearAllData() {
+  if (confirm("⚠️ ATENÇÃO: Isso vai apagar TODOS os produtos e vendas salvos neste navegador. \n\nDeseja continuar?")) {
+    localStorage.clear();
+    location.reload();
+  }
 }
