@@ -243,5 +243,5 @@ function deleteCategory(name) {
 }
 
 function syncAll() {
-  alert("🚀 Loja Sincronizada com o Netlify! Todos os dados e fotos salvos na nuvem foram atualizados.");
+  alert("🚀 Loja Sincronizada com Cloudflare Pages!\n\nSeus dados estão seguros e o site oficial é:\nhttps://kei-sampaio-loja.pages.dev");
 }
