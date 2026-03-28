@@ -5,8 +5,11 @@ let products = [];
 let categories = ['Todos', 'Dia das Mães', 'Dia dos Namorados'];
 let currentCategory = 'all';
 
-// --- IndexedDB Core (O "Armazém") ---
+// --- Configuração ---
 const DB_NAME = 'KeiSampaioDB';
+const CLOUD_API = '/functions/api/data';
+
+// --- IndexedDB Core (O "Armazém") ---
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -57,14 +60,45 @@ async function refreshData() {
 }
 
 async function loadStoreData() {
+  // 1. Tentar baixar da Nuvem primeiro (Cloudflare KV)
+  try {
+    const res = await fetch(CLOUD_API);
+    const cloudData = await res.json();
+    if (cloudData && cloudData.products) {
+      products = cloudData.products;
+      categories = cloudData.categories || categories;
+      console.log("Dados carregados da nuvem! ☁️");
+      
+      // Salvar no cache local para uso offline
+      await dbSet('products', 'list', products);
+      await dbSet('categories', 'list', categories);
+      return;
+    }
+  } catch (e) {
+    console.log("Usando cache local (Offline)...");
+  }
+
+  // 2. Fallback: Carregar do IndexedDB local
   products = await dbGet('products', 'list') || [];
   const storedCats = await dbGet('categories', 'list');
   if (storedCats) categories = storedCats;
 
-  // Fallback se o DB estiver vazio (transição do LocalStorage)
+  // 3. Fallback de emergência (LocalStorage legado)
   if (products.length === 0) {
     products = JSON.parse(localStorage.getItem('products')) || [];
   }
+}
+
+async function dbSet(store, key, val) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(val, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e.target.error);
+    } catch (e) { reject(e); }
+  });
 }
 
 // --- Renderização ---

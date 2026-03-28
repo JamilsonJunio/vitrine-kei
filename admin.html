@@ -19,23 +19,29 @@
     .admin-section { display: none; }
     .admin-section.active { display: block; }
 
-    /* Form Styles */
-    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-    .form-group { display: flex; flex-direction: column; gap: 5px; }
-    .form-input { padding: 10px; border-radius: 12px; border: 1px solid #efefef; background: #fafafa; font-family: inherit; }
+    /* Estilo Premium para Tabelas */
+    .admin-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; margin-top: 10px; }
+    .admin-table th { text-align: left; padding: 12px 15px; color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+    .admin-table tr { background: #fafafa; transition: transform 0.2s; }
+    .admin-table tr:hover { transform: scale(1.01); background: #fefefe; }
+    .admin-table td { padding: 15px; border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; }
+    .admin-table td:first-child { border-left: 1px solid #f0f0f0; border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+    .admin-table td:last-child { border-right: 1px solid #f0f0f0; border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
 
-    /* Stats Cards */
-    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
-    .stat-card { background: #fdfaf8; padding: 15px; border-radius: 15px; text-align: center; border: 1px solid #fbe6da; }
-    .stat-val { display: block; font-size: 1.2rem; font-weight: 800; color: var(--primary); }
-    .stat-label { font-size: 0.65rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-
-    /* Actions */
-    .btn-sync { background: #1976d2; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    /* Barra de Sincronização Premium */
+    #sync-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.9); z-index: 2000;
+      flex-direction: column; align-items: center; justify-content: center;
+    }
+    .sync-loader-box { width: 280px; text-align: center; }
+    .sync-bar-bg { background: #eee; height: 10px; border-radius: 5px; margin-top: 15px; overflow: hidden; }
+    .sync-bar-fill { width: 0%; height: 100%; background: var(--primary); transition: width 0.3s; }
     
     @media (max-width: 480px) {
       .form-grid { grid-template-columns: 1fr; }
       .stats-row { grid-template-columns: 1fr; }
+      .admin-container { padding: 15px; }
     }
   </style>
 </head>
@@ -44,7 +50,18 @@
   <div class="admin-container">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
       <h1 style="font-family:'Outfit'; color:var(--primary); font-size:1.5rem;">💎 Painel Admin</h1>
-      <button class="btn-sync" onclick="syncAll()">🚀 Sincronizar Loja</button>
+      <button class="btn-sync" onclick="syncAll()" style="background:var(--primary); box-shadow: 0 4px 15px rgba(220, 169, 153, 0.3);">🚀 Sincronizar Loja</button>
+    </div>
+
+    <!-- OVERLAY DE SINCRONIA -->
+    <div id="sync-overlay">
+      <div class="sync-loader-box">
+        <h3 id="sync-status-text" style="font-family:'Outfit'; color:var(--primary);">Sincronizando loja...</h3>
+        <div class="sync-bar-bg">
+          <div id="sync-bar-fill" class="sync-bar-fill"></div>
+        </div>
+        <p style="font-size:0.7rem; color:#888; margin-top:10px;">Enviando dados para a nuvem...</p>
+      </div>
     </div>
 
     <!-- Medidor de Memória Kei Sampaio -->
@@ -78,37 +95,41 @@
 
     <!-- SEÇÃO: PRODUTOS -->
     <section class="admin-section" id="produtos">
-      <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
         <h3 style="font-size:1rem;">Produtos na Vitrine</h3>
-        <button class="tab active" style="padding:5px 15px;" onclick="openAddProduct()">+ Novo</button>
+        <button class="tab active" style="padding:8px 20px; border-radius:12px; background:var(--primary); color:white; border:none;" onclick="openAddProduct()">+ Novo Produto</button>
       </div>
+      
+      <!-- Mini Painel de Categorias Integrado -->
+      <div style="background:#fdfaf8; padding:15px; border-radius:15px; margin-bottom:20px; border:1px solid #fbe6da;">
+        <h4 style="font-size:0.75rem; color:#888; text-transform:uppercase; margin-bottom:10px;">Gestão de Categorias</h4>
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+           <input type="text" id="new-cat-name" class="form-input" placeholder="Nova categoria..." style="flex:1; padding:8px;">
+           <button class="btn-add" style="width:auto; padding:8px 15px; background:var(--primary); color:white; border-radius:10px;" onclick="addCategory()">Add</button>
+        </div>
+        <div id="category-list-admin" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+      </div>
+
       <table class="admin-table">
-        <thead><tr><th>Foto</th><th>Título</th><th>Preço</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Foto</th><th>Título</th><th class="hide-mobile">Categoria</th><th>Preço</th><th>Ações</th></tr></thead>
         <tbody id="product-list-admin"></tbody>
       </table>
     </section>
 
     <!-- SEÇÃO: CONFIG -->
     <section class="admin-section" id="config">
-      <h3 style="margin-bottom:15px; font-size:1rem;">Configurações Avançadas</h3>
-      <div class="admin-card">
-        <label style="font-size:0.8rem; font-weight:700; color:#555;">Sua Chave API ImgBB (Nuvem)</label>
-        <p style="font-size:0.75rem; color:#888; margin-bottom:10px;">Pegue grátis em <a href="https://imgbb.com" target="_blank">imgbb.com</a> para ter fotos ilimitadas.</p>
-        <input type="text" id="admin-imgbb-key" class="form-input" placeholder="Cole sua chave aqui...">
-        <button class="btn-add" style="background:var(--primary); color:white; margin-top:10px;" onclick="saveConfig()">Salvar Configurações</button>
+      <h3 style="margin-bottom:15px; font-size:1rem;">Segurança e Manutenção</h3>
+      
+      <div class="stat-card" style="text-align:left; padding:20px;">
+        <h4 style="font-size:0.9rem; margin-bottom:10px;">Nuvem Cloudflare</h4>
+        <p style="font-size:0.8rem; color:#888;">Sua loja está conectada ao banco de dados global. Isso permite que você edite no PC e veja no celular instantaneamente.</p>
+        <button class="btn-sync" onclick="loadFromCloud()" style="margin-top:15px; background:#444;">📥 Baixar Dados da Nuvem</button>
       </div>
-      <div class="admin-card">
-        <h4 style="font-size:0.8rem; margin-bottom:10px;">Gestão de Categorias</h4>
-        <div style="display:flex; gap:10px; margin-bottom:15px;">
-           <input type="text" id="new-cat-name" class="form-input" placeholder="Nova categoria..." style="flex:1">
-           <button class="btn-add" style="width:auto; padding:10px; background:var(--primary); color:white;" onclick="addCategory()">Add</button>
-        </div>
-        <div id="category-list-admin" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-      </div>
-      <div class="admin-card" style="border-color: #ffcdd2; background: #fff8f8; margin-top:20px;">
+
+      <div class="admin-card" style="border-color: #ffcdd2; background: #fff8f8; margin-top:20px; padding:20px; border-radius:15px;">
         <h4 style="font-size:0.8rem; color:red; margin-bottom:5px;">🆘 Botão de Emergência</h4>
-        <p style="font-size:0.7rem; color:#888; margin-bottom:10px;">Use apenas se sua memória lotar e você não conseguir salvar produtos novos.</p>
-        <button class="btn-add" style="background:#d32f2f; color:white; width:auto; padding:8px 15px;" onclick="clearAllData()">Limpar Memória de Teste (Reset)</button>
+        <p style="font-size:0.7rem; color:#888; margin-bottom:10px;">Use apenas para resetar os dados locais deste navegador.</p>
+        <button class="btn-add" style="background:#d32f2f; color:white; width:auto; padding:8px 15px;" onclick="clearAllData()">Limpar Local (Reset)</button>
       </div>
     </section>
   </div>

@@ -3,12 +3,12 @@
 let products = [];
 let sales = [];
 let categories = ['Todos', 'Dia das Mães', 'Dia dos Namorados'];
-let config = { imgbb_key: "" };
 let currentImages = [];
 
-// --- IndexedDB Core (O "Armazém") ---
+// --- Configuração ---
 const DB_NAME = 'KeiSampaioDB';
 const STORES = ['products', 'sales', 'categories', 'config'];
+const CLOUD_API = '/functions/api/data';
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderProductsAdmin();
   renderCategoriesAdmin();
   updateMemoryMeter();
-  document.getElementById('admin-imgbb-key').value = config.imgbb_key;
 });
 
 async function migrateFromLocalStorage() {
@@ -129,12 +128,24 @@ function renderProductsAdmin() {
   const container = document.getElementById('product-list-admin');
   container.innerHTML = products.map(p => `
     <tr>
-      <td><img src="${Array.isArray(p.img) ? p.img[0] : p.img}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"></td>
-      <td><strong>${p.title}</strong></td>
-      <td>R$ ${p.price_current.toFixed(2)}</td>
+      <td style="width: 70px;">
+        <img src="${Array.isArray(p.img) ? p.img[0] : p.img}" style="width:50px; height:50px; border-radius:10px; object-fit:cover; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+      </td>
       <td>
-        <button class="tab" onclick="editProduct(${p.id})">✎</button>
-        <button class="tab" style="color:red;" onclick="deleteProduct(${p.id})">🗑</button>
+        <div style="font-weight:700; color:#333;">${p.title}</div>
+        <div style="font-size:0.7rem; color:#aaa; margin-top:2px;" class="show-mobile-only">${p.category}</div>
+      </td>
+      <td class="hide-mobile">
+        <span style="background:#f0f0f0; padding:4px 10px; border-radius:8px; font-size:0.75rem; color:#666;">${p.category}</span>
+      </td>
+      <td style="font-weight:800; color:var(--primary);">
+        R$ ${p.price_current.toFixed(2)}
+      </td>
+      <td>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-action" onclick="editProduct(${p.id})" style="border:none; background:#eee; padding:8px; border-radius:8px; cursor:pointer;">✎</button>
+          <button class="btn-action" onclick="deleteProduct(${p.id})" style="border:none; background:#ffebee; color:#d32f2f; padding:8px; border-radius:8px; cursor:pointer;">🗑</button>
+        </div>
       </td>
     </tr>
   `).join('');
@@ -314,8 +325,74 @@ async function deleteCategory(name) {
   }
 }
 
-function syncAll() {
-  alert("🚀 Loja Sincronizada com Cloudflare Pages!\n\nSeus dados estão seguros e o site oficial é:\nhttps://kei-sampaio-loja.pages.dev");
+async function syncAll() {
+  const overlay = document.getElementById('sync-overlay');
+  const bar = document.getElementById('sync-bar-fill');
+  const status = document.getElementById('sync-status-text');
+  
+  overlay.style.display = 'flex';
+  bar.style.width = '0%';
+  status.innerText = "Sincronizando loja...";
+
+  try {
+    // Passo 1: Preparar dados
+    bar.style.width = '30%';
+    const data = {
+      products,
+      sales,
+      categories,
+      lastSync: Date.now()
+    };
+
+    // Passo 2: Enviar
+    bar.style.width = '60%';
+    const res = await fetch(CLOUD_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    if (!res.ok) throw new Error("Erro na resposta do servidor");
+
+    // Passo 3: Finalizar
+    bar.style.width = '100%';
+    status.innerText = "Loja Sincronizada! ✅";
+    
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      alert("🚀 Sucesso! Sua loja foi salva na nuvem e está pronta para ser aberta no celular.");
+    }, 1000);
+
+  } catch (err) {
+    console.error(err);
+    overlay.style.display = 'none';
+    alert("❌ Falha na Sincronização.\n\nVerifique se o banco de dados KV está configurado no seu painel Cloudflare.");
+  }
+}
+
+async function loadFromCloud() {
+  if (!confirm("Isso irá substituir os dados atuais deste navegador pelos dados salvos na nuvem. Continuar?")) return;
+  
+  try {
+    const res = await fetch(CLOUD_API);
+    const data = await res.json();
+    
+    if (data.products) {
+      products = data.products;
+      sales = data.sales || [];
+      categories = data.categories || categories;
+      
+      await dbSet('products', 'list', products);
+      await dbSet('sales', 'list', sales);
+      await dbSet('categories', 'list', categories);
+      
+      location.reload();
+    } else {
+      alert("Nenhum dado encontrado na nuvem.");
+    }
+  } catch (err) {
+    alert("Erro ao baixar dados: " + err.message);
+  }
 }
 
 async function clearAllData() {
