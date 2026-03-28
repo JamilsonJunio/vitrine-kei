@@ -1,0 +1,14 @@
+# Arquivos de sistema e temporários
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+.tempmediaStorage/
+.netlify/
+*.zip
+*.webp
+*.png
+# Manter as imagens oficiais da loja (se estiverem em img/)
+!img/*.png
+!img/*.jpg
+!img/*.jpeg
