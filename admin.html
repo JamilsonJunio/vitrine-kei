@@ -47,6 +47,14 @@
       <button class="btn-sync" onclick="syncAll()">🚀 Sincronizar Loja</button>
     </div>
 
+    <!-- Medidor de Memória Kei Sampaio -->
+    <div id="memory-meter" style="padding:15px; background:#f4f7f6; border-radius:15px; margin-bottom:20px; border:1px solid #e1e9e7;">
+      <div id="memory-meter-text" style="font-size:0.75rem; font-weight:700; color:#555; margin-bottom:5px;">Memória Usada: 0%</div>
+      <div style="background:#e0e0e0; height:8px; border-radius:4px; overflow:hidden;">
+        <div id="memory-meter-fill" style="width:0%; height:100%; background:var(--primary); transition:0.3s;"></div>
+      </div>
+    </div>
+
     <!-- Navegação -->
     <div class="admin-tabs">
       <div class="admin-tab active" data-target="vendas">💰 Vendas</div>

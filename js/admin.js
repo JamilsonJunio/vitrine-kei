@@ -13,8 +13,22 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSales();
   renderProductsAdmin();
   renderCategoriesAdmin();
+  updateMemoryMeter();
   document.getElementById('admin-imgbb-key').value = config.imgbb_key;
 });
+
+function updateMemoryMeter() {
+  const total = 5 * 1024 * 1024; // 5MB limit
+  const used = JSON.stringify(localStorage).length;
+  const percent = Math.min((used / total) * 100, 100).toFixed(1);
+  const meter = document.getElementById('memory-meter-fill');
+  const text = document.getElementById('memory-meter-text');
+  if(meter && text) {
+    meter.style.width = percent + "%";
+    meter.style.background = percent > 80 ? '#d32f2f' : (percent > 50 ? '#fbc02d' : '#2e7d32');
+    text.innerText = `Memória Usada: ${percent}% (${(used/1024).toFixed(0)}KB de 5MB)`;
+  }
+}
 
 // --- Abas ---
 function initTabs() {
@@ -125,6 +139,7 @@ async function saveProduct(e) {
   try {
     localStorage.setItem('products', JSON.stringify(products));
     renderProductsAdmin();
+    updateMemoryMeter();
     toggleProductModal(false);
     alert("Pronto! Loja atualizada com sucesso! 💎");
   } catch (err) {
