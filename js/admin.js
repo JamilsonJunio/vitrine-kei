@@ -1,14 +1,49 @@
-// --- Admin Logic for Kei Sampaio PRO ---
+// --- Admin Logic for Kei Sampaio PRO (v3.0 - IndexedDB Powered) ---
 
-let products = JSON.parse(localStorage.getItem('products')) || [];
-let sales = JSON.parse(localStorage.getItem('sales')) || [];
-let categories = JSON.parse(localStorage.getItem('categories')) || ['Todos', 'Dia das Mães', 'Dia dos Namorados'];
-let config = JSON.parse(localStorage.getItem('config')) || { imgbb_key: "" };
+let products = [];
+let sales = [];
+let categories = ['Todos', 'Dia das Mães', 'Dia dos Namorados'];
+let config = { imgbb_key: "" };
+let currentImages = [];
 
-let currentImages = []; // Para armazenar as imagens do produto atual (preview/Base64)
+// --- IndexedDB Core (O "Armazém") ---
+const DB_NAME = 'KeiSampaioDB';
+const STORES = ['products', 'sales', 'categories', 'config'];
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      STORES.forEach(s => { if (!db.objectStoreNames.contains(s)) db.createObjectStore(s); });
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function dbGet(store, key) {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+async function dbSet(store, key, val) {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(val, key);
+    tx.oncomplete = () => resolve();
+  });
+}
 
 // --- Inicialização ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await migrateFromLocalStorage();
+  await loadData();
   initTabs();
   renderSales();
   renderProductsAdmin();
@@ -17,16 +52,41 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('admin-imgbb-key').value = config.imgbb_key;
 });
 
+async function migrateFromLocalStorage() {
+  const migrated = localStorage.getItem('migrated_v3');
+  if (migrated) return;
+
+  console.log("Migrando dados do LocalStorage para o Armazém...");
+  const oldProducts = JSON.parse(localStorage.getItem('products')) || [];
+  const oldSales = JSON.parse(localStorage.getItem('sales')) || [];
+  const oldCats = JSON.parse(localStorage.getItem('categories')) || categories;
+  const oldConfig = JSON.parse(localStorage.getItem('config')) || config;
+
+  if (oldProducts.length) await dbSet('products', 'list', oldProducts);
+  if (oldSales.length) await dbSet('sales', 'list', oldSales);
+  await dbSet('categories', 'list', oldCats);
+  await dbSet('config', 'main', oldConfig);
+
+  localStorage.setItem('migrated_v3', 'true');
+  console.log("Migração concluída com sucesso!");
+}
+
+async function loadData() {
+  products = await dbGet('products', 'list') || [];
+  sales = await dbGet('sales', 'list') || [];
+  categories = await dbGet('categories', 'list') || categories;
+  config = await dbGet('config', 'main') || config;
+}
+
 function updateMemoryMeter() {
-  const total = 5 * 1024 * 1024; // 5MB limit
-  const used = JSON.stringify(localStorage).length;
-  const percent = Math.min((used / total) * 100, 100).toFixed(1);
-  const meter = document.getElementById('memory-meter-fill');
+  // Agora o limite é o disco do usuário (centenas de MB), não os 5MB do LocalStorage
+  const used = JSON.stringify(products).length + JSON.stringify(sales).length;
   const text = document.getElementById('memory-meter-text');
-  if(meter && text) {
-    meter.style.width = percent + "%";
-    meter.style.background = percent > 80 ? '#d32f2f' : (percent > 50 ? '#fbc02d' : '#2e7d32');
-    text.innerText = `Memória Usada: ${percent}% (${(used/1024).toFixed(0)}KB de 5MB)`;
+  const meter = document.getElementById('memory-meter-fill');
+  if (text && meter) {
+    text.innerText = `Armazém Ativado (Espaço utilizado: ${(used/1024).toFixed(0)}KB)`;
+    meter.style.width = "100%";
+    meter.style.background = "#2e7d32"; // Sempre verde (Saudável)
   }
 }
 
@@ -105,10 +165,9 @@ async function saveProduct(e) {
   e.preventDefault();
   const id = document.getElementById('admin-p-id').value;
   const btn = e.target.querySelector('button[type="submit"]');
-  btn.innerText = "⏳ Enviando para Nuvem...";
+  btn.innerText = "⏳ Salvando...";
   btn.disabled = true;
 
-  // Upload para ImgBB se houver chave e as imagens forem Base64
   const finalImages = [];
   for (let img of currentImages) {
     if (img.startsWith('data:') && config.imgbb_key) {
@@ -136,37 +195,26 @@ async function saveProduct(e) {
     products.push(pData);
   }
 
-  try {
-    localStorage.setItem('products', JSON.stringify(products));
-    renderProductsAdmin();
-    updateMemoryMeter();
-    toggleProductModal(false);
-    alert("Pronto! Loja atualizada com sucesso! 💎");
-  } catch (err) {
-    console.error("Storage Full Error:", err);
-    alert("⚠️ MEMÓRIA CHEIA: Você atingiu o limite de armazenamento do seu navegador para este site. \n\nSOLUÇÃO:\n1. Use o link oficial .pages.dev (ele está limpo!)\n2. Remova produtos antigos.\n3. Ou adicione a chave ImgBB nas configurações.");
-  }
+  await dbSet('products', 'list', products);
+  renderProductsAdmin();
+  updateMemoryMeter();
+  toggleProductModal(false);
   
   btn.innerText = "Salvar no Servidor ✨";
   btn.disabled = false;
+  alert("Pronto! Loja atualizada com sucesso! 💎");
 }
 
-// --- Upload Logic ---
 async function uploadToImgBB(base64) {
   const apiKey = config.imgbb_key;
   if (!apiKey) return null;
-  
   const body = new FormData();
   body.append('image', base64.split(',')[1]);
-  
   try {
     const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, { method: 'POST', body });
     const data = await res.json();
     return data.data.url;
-  } catch (err) {
-    console.error("Erro no ImgBB:", err);
-    return null;
-  }
+  } catch (err) { return null; }
 }
 
 function previewImagesAdmin(e) {
@@ -174,16 +222,13 @@ function previewImagesAdmin(e) {
   files.forEach(file => {
     const reader = new FileReader();
     reader.onload = (event) => {
-      // Redimensionar para salvar espaço
       const img = new Image();
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        // Otimização Kei Sampaio: 600x600 para máxima leveza e economia de espaço
         canvas.width = 600; canvas.height = 600; 
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, 600, 600);
-        // Qualidade 0.6 para equilibrar nitidez e tamanho do arquivo
         currentImages.push(canvas.toDataURL('image/jpeg', 0.6));
         renderPreviews();
       }
@@ -207,28 +252,26 @@ function removePreview(idx) {
   renderPreviews();
 }
 
-// --- Outros ---
-function saveConfig() {
+async function saveConfig() {
   config.imgbb_key = document.getElementById('admin-imgbb-key').value.trim();
-  localStorage.setItem('config', JSON.stringify(config));
+  await dbSet('config', 'main', config);
   alert("Configurações salvas! ⚙️");
 }
 
-function deleteProduct(id) {
+async function deleteProduct(id) {
   if (confirm("Deletar esse produto?")) {
     products = products.filter(p => p.id !== id);
-    localStorage.setItem('products', JSON.stringify(products));
+    await dbSet('products', 'list', products);
     renderProductsAdmin();
+    updateMemoryMeter();
   }
 }
 
 function toggleProductModal(show) { document.getElementById('product-modal-admin').style.display = show ? 'flex' : 'none'; }
-
 function populateCategories() {
   document.getElementById('admin-p-category').innerHTML = categories.filter(c => c !== 'Todos').map(c => `<option value="${c}">${c}</option>`).join('');
 }
 
-// --- Gestão de Categorias ---
 function renderCategoriesAdmin() {
   const container = document.getElementById('category-list-admin');
   if (!container) return;
@@ -239,11 +282,11 @@ function renderCategoriesAdmin() {
   `).join('');
 }
 
-function addCategory() {
+async function addCategory() {
   const name = document.getElementById('new-cat-name').value.trim();
   if (name && !categories.includes(name)) {
     categories.push(name);
-    localStorage.setItem('categories', JSON.stringify(categories));
+    await dbSet('categories', 'list', categories);
     renderCategoriesAdmin();
     populateCategories();
     document.getElementById('new-cat-name').value = "";
@@ -251,10 +294,10 @@ function addCategory() {
   }
 }
 
-function deleteCategory(name) {
+async function deleteCategory(name) {
   if (confirm(`Deseja excluir a categoria "${name}"?`)) {
     categories = categories.filter(c => c !== name);
-    localStorage.setItem('categories', JSON.stringify(categories));
+    await dbSet('categories', 'list', categories);
     renderCategoriesAdmin();
     populateCategories();
   }
@@ -264,9 +307,14 @@ function syncAll() {
   alert("🚀 Loja Sincronizada com Cloudflare Pages!\n\nSeus dados estão seguros e o site oficial é:\nhttps://kei-sampaio-loja.pages.dev");
 }
 
-function clearAllData() {
+async function clearAllData() {
   if (confirm("⚠️ ATENÇÃO: Isso vai apagar TODOS os produtos e vendas salvos neste navegador. \n\nDeseja continuar?")) {
-    localStorage.clear();
-    location.reload();
+    const db = await openDB();
+    const tx = db.transaction(STORES, 'readwrite');
+    STORES.forEach(s => tx.objectStore(s).clear());
+    tx.oncomplete = () => {
+        localStorage.removeItem('migrated_v3');
+        location.reload();
+    }
   }
 }

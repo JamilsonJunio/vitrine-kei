@@ -1,106 +1,133 @@
-// --- Configurações Principais Kei Sampaio ---
-const PIX_KEY = "1150f286-83b6-4bba-a2ef-19ddf94cf48e";
-const RECEIVER_NAME = "KEI SAMPAIO";
-const RECEIVER_CITY = "CONTAGEM";
-const WHATSAPP_NUMBER = "5533920008206";
+// --- Storefront Logic for Kei Sampaio PRO (v3.0 - IndexedDB Powered) ---
 
-// Dados
-let rawProducts = JSON.parse(localStorage.getItem('products')) || [];
 let cart = JSON.parse(localStorage.getItem('cart')) || [];
+let products = [];
+let categories = ['Todos', 'Dia das Mães', 'Dia dos Namorados'];
 let currentCategory = 'all';
 
-// Zoom Modal State
-let currentZoomedProductIdx = null;
-let currentZoomedImgIdx = 0;
+// --- IndexedDB Core (O "Armazém") ---
+const DB_NAME = 'KeiSampaioDB';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('products')) db.createObjectStore('products');
+      if (!db.objectStoreNames.contains('sales')) db.createObjectStore('sales');
+      if (!db.objectStoreNames.contains('categories')) db.createObjectStore('categories');
+      if (!db.objectStoreNames.contains('config')) db.createObjectStore('config');
+    };
+  });
+}
+
+async function dbGet(store, key) {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    try {
+        const tx = db.transaction(store, 'readonly');
+        const req = tx.objectStore(store).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+    } catch(e) { resolve(null); }
+  });
+}
 
 // --- Inicialização ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadStoreData();
   renderCategories();
   renderProducts();
   updateCartUI();
+
+  // Escutar mudanças no carrinho (Sync entre abas)
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'cart' || e.key === 'products') {
+      refreshData();
+    }
+  });
 });
 
-// Sincronizar carrinho entre abas
-window.addEventListener('storage', (e) => {
-  if (e.key === 'cart' || e.key === 'products') {
-    rawProducts = JSON.parse(localStorage.getItem('products')) || [];
-    cart = JSON.parse(localStorage.getItem('cart')) || [];
+async function refreshData() {
+    await loadStoreData();
     updateCartUI();
     renderProducts();
+}
+
+async function loadStoreData() {
+  products = await dbGet('products', 'list') || [];
+  const storedCats = await dbGet('categories', 'list');
+  if (storedCats) categories = storedCats;
+
+  // Fallback se o DB estiver vazio (transição do LocalStorage)
+  if (products.length === 0) {
+    products = JSON.parse(localStorage.getItem('products')) || [];
   }
-});
-
-// --- Vitrine & Categorias ---
-function renderCategories() {
-  const categories = JSON.parse(localStorage.getItem('categories')) || ['Todos', 'Dia das Mães', 'Dia dos Namorados'];
-  const container = document.getElementById('categories-tabs');
-  container.innerHTML = categories.map(c => `
-    <div class="tab ${currentCategory === c.toLowerCase() || (c === 'Todos' && currentCategory === 'all') ? 'active' : ''}" 
-         onclick="filterByCategory('${c === 'Todos' ? 'all' : c}')">${c}</div>
-  `).join('');
 }
 
-function filterByCategory(cat) {
-  currentCategory = cat.toLowerCase();
-  renderCategories();
-  renderProducts();
-}
-
+// --- Renderização ---
 function renderProducts() {
   const container = document.getElementById('products-grid');
-  const filtered = currentCategory === 'all' 
-    ? rawProducts 
-    : rawProducts.filter(p => p.category.toLowerCase() === currentCategory);
-
+  if (!container) return;
+  
+  const filtered = currentCategory === 'all' ? products : products.filter(p => p.category === currentCategory);
+  
   if (filtered.length === 0) {
-    container.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding:50px; color:#aaa;">Nenhum produto nesta categoria 🌸</div>`;
+    container.innerHTML = '<p style="grid-column:1/-1; text-align:center; padding:50px; color:#888;">Nenhum produto encontrado nesta categoria. 🌸</p>';
     return;
   }
 
   container.innerHTML = filtered.map((p, pIdx) => {
     const images = Array.isArray(p.img) ? p.img : [p.img];
     return `
-      <div class="product-card" id="card-${p.id}">
+    <div class="product-card" onclick="zoomImage(${pIdx}, 0)">
+      <div class="product-image-container">
+        <img src="${images[0]}" alt="${p.title}" id="img-main-${p.id}">
         ${p.price_old ? `<span class="promo-badge">PROMOÇÃO</span>` : ''}
-        <div class="product-image-container">
-          <img src="${images[0]}" alt="${p.title}" id="img-main-${p.id}" onclick="zoomImage(${pIdx}, 0)">
-          ${images.length > 1 ? `
-            <div class="carousel-nav">
-              <span class="nav-btn" onclick="prevCardImg(${pIdx}, event)">❮</span>
-              <span class="nav-btn" onclick="nextCardImg(${pIdx}, event)">❯</span>
-            </div>
-          ` : ''}
-        </div>
-        <div class="product-info">
-          <div>
-            <h3 class="product-title">${p.title}</h3>
-            <div style="font-size:0.75rem; color:#aaa; margin-top:5px; margin-bottom: 5px;">${p.category}</div>
-            <div class="product-price-box">
-              ${p.price_old ? `<span class="old-price">R$ ${p.price_old.toFixed(2)}</span>` : ''}
-              <span class="current-price">R$ ${p.price_current.toFixed(2).replace('.', ',')}</span>
-            </div>
-          </div>
-          <button class="btn-add" onclick="addToCart(${p.id})">Adicionar no Carrinho</button>
-        </div>
       </div>
-    `;
+      <div class="product-info">
+        <div>
+          <h3 class="product-title">${p.title}</h3>
+          <div style="font-size:0.75rem; color:#aaa; margin-top:5px; margin-bottom: 5px;">${p.category}</div>
+          <div class="product-price-box">
+            ${p.price_old ? `<span class="old-price">R$ ${p.price_old.toFixed(2).replace('.', ',')}</span>` : ''}
+            <span class="current-price">R$ ${p.price_current.toFixed(2).replace('.', ',')}</span>
+          </div>
+        </div>
+        <button class="btn-add" onclick="event.stopPropagation(); addToCart(${p.id})">Adicionar no Carrinho</button>
+      </div>
+    </div>
+  `}).join('');
+}
+
+function renderCategories() {
+  const container = document.getElementById('categories-tabs');
+  if (!container) return;
+  
+  const allCats = ['Todos', ...categories.filter(c => c !== 'Todos')];
+  container.innerHTML = allCats.map(c => {
+      const val = (c === 'Todos' ? 'all' : c);
+      return `<div class="tab ${currentCategory === val ? 'active' : ''}" onclick="filterByCategory('${val}')">${c}</div>`;
   }).join('');
 }
 
-// --- Lógica do Carrinho ---
+function filterByCategory(cat) {
+  currentCategory = cat;
+  renderCategories();
+  renderProducts();
+}
+
+// --- Carrinho ---
 function addToCart(productId) {
-  const p = rawProducts.find(prod => prod.id === productId);
+  const p = products.find(prod => prod.id === productId);
   if (!p) return;
-  cart.push({...p});
+  
+  cart.push({ ...p, cartId: Date.now() });
   localStorage.setItem('cart', JSON.stringify(cart));
   updateCartUI();
-  
-  const btn = event.target;
-  const original = btn.innerText;
-  btn.innerText = "✅ Adicionado!";
-  btn.style.background = "#25d366";
-  btn.style.color = "white";
-  setTimeout(() => { btn.innerText = original; btn.style.background = ""; btn.style.color = ""; }, 1000);
+  toggleCartModal(true);
 }
 
 function removeFromCart(idx) {
@@ -110,7 +137,6 @@ function removeFromCart(idx) {
 }
 
 function updateCartUI() {
-  // Sincronizar com localStorage para evitar bug do contador fantasma
   cart = JSON.parse(localStorage.getItem('cart')) || [];
   
   document.getElementById('cart-count').innerText = cart.length;
@@ -124,150 +150,115 @@ function updateCartUI() {
     totalValEl.innerText = "R$ 0,00";
     footer.style.display = "none";
     empty.style.display = "block";
-  } else {
-    footer.style.display = "block";
-    empty.style.display = "none";
-    itemsContainer.innerHTML = cart.map((item, idx) => `
-      <div class="cart-item-row">
-        <div class="cart-item-info">
-          <img src="${Array.isArray(item.img) ? item.img[0] : item.img}" class="cart-item-img">
-          <div class="cart-item-details">
-            <span class="cart-item-title">${item.title}</span>
-            <span class="cart-item-price">R$ ${item.price_current.toFixed(2).replace('.', ',')}</span>
-          </div>
-        </div>
-        <span onclick="removeFromCart(${idx})" style="color:red; cursor:pointer; font-weight:800; padding:10px;">✕</span>
-      </div>
-    `).join('');
-    
-    const total = cart.reduce((sum, i) => sum + i.price_current, 0);
-    totalValEl.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+    return;
   }
+
+  footer.style.display = "block";
+  empty.style.display = "none";
+  itemsContainer.innerHTML = cart.map((item, idx) => `
+    <div class="cart-item-row">
+      <div class="cart-item-info">
+        <img src="${Array.isArray(item.img) ? item.img[0] : item.img}" class="cart-item-img">
+        <div class="cart-item-details">
+          <span class="cart-item-title">${item.title}</span>
+          <span class="cart-item-price">R$ ${item.price_current.toFixed(2).replace('.', ',')}</span>
+        </div>
+      </div>
+      <span onclick="removeFromCart(${idx})" style="color:red; cursor:pointer; font-weight:800; padding:10px;">✕</span>
+    </div>
+  `).join('');
+
+  const total = cart.reduce((s, v) => s + v.price_current, 0);
+  totalValEl.innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
 }
 
-// --- Modais ---
-function toggleCartModal(show) { document.getElementById('cart-modal').style.display = show ? 'flex' : 'none'; }
-function togglePixModal(show) { document.getElementById('pix-modal').style.display = show ? 'flex' : 'none'; }
-
-function zoomImage(pIdx, iIdx) { 
-  currentZoomedProductIdx = pIdx;
-  currentZoomedImgIdx = iIdx;
-  const p = rawProducts[pIdx];
-  const images = Array.isArray(p.img) ? p.img : [p.img];
-  document.getElementById('zoomed-image').src = images[iIdx];
-  document.getElementById('image-modal').style.display = 'flex';
+function toggleCartModal(show) {
+  const modal = document.getElementById('cart-modal');
+  if(modal) modal.style.display = show ? 'flex' : 'none';
 }
 
-function closeImageZoom() { document.getElementById('image-modal').style.display = 'none'; }
-
-function nextZoomImg() { changeZoomImg(1); }
-function prevZoomImg() { changeZoomImg(-1); }
-
-function changeZoomImg(dir) {
-  const p = rawProducts[currentZoomedProductIdx];
-  const images = Array.isArray(p.img) ? p.img : [p.img];
-  currentZoomedImgIdx = (currentZoomedImgIdx + dir + images.length) % images.length;
-  document.getElementById('zoomed-image').src = images[currentZoomedImgIdx];
+function togglePixModal(show) {
+    const modal = document.getElementById('pix-modal');
+    if(modal) modal.style.display = show ? 'flex' : 'none';
 }
 
-// --- Card Carousel ---
-let currentCardIndices = {}; // {productId: currentImageIndex}
-
-function nextCardImg(pIdx, e) { e.stopPropagation(); changeCardImg(pIdx, 1); }
-function prevCardImg(pIdx, e) { e.stopPropagation(); changeCardImg(pIdx, -1); }
-
-function changeCardImg(pIdx, dir) {
-  const p = rawProducts[pIdx];
-  const id = p.id;
-  const images = Array.isArray(p.img) ? p.img : [p.img];
-  currentCardIndices[id] = ((currentCardIndices[id] || 0) + dir + images.length) % images.length;
-  document.getElementById(`img-main-${id}`).src = images[currentCardIndices[id]];
-}
-
-// --- Pagamento ---
-function proceedToPayment() {
+// --- Checkout & WhatsApp ---
+async function proceedToPayment() {
   const name = document.getElementById('user-name').value.trim();
-  if (!name) { alert("Por favor, digite seu nome! 🌸"); return; }
+  if (!name) return alert("Por favor, digite seu nome. 🌸");
   
-  logSale(name);
+  const total = cart.reduce((s, v) => s + v.price_current, 0);
+  
+  // Registrar venda no banco (IndexedDB)
+  const sale = {
+    id: Date.now(),
+    customer: name,
+    total: total,
+    items: cart.map(i => i.title),
+    date: new Date().toLocaleDateString('pt-BR')
+  };
+  
+  const currentSales = await dbGet('sales', 'list') || [];
+  currentSales.push(sale);
+  const db = await openDB();
+  const tx = db.transaction('sales', 'readwrite');
+  tx.objectStore('sales').put(currentSales, 'list');
+  
+  // Gerar PIX
   generatePixQR();
   toggleCartModal(false);
   togglePixModal(true);
 }
 
-function logSale(customer) {
-  const total = cart.reduce((sum, i) => sum + i.price_current, 0);
-  const now = new Date();
-  const sale = {
-    id: Date.now(),
-    customer: customer,
-    total: total,
-    items: cart.map(i => i.title),
-    date: now.toLocaleDateString('pt-BR')
-  };
-  let sales = JSON.parse(localStorage.getItem('sales')) || [];
-  sales.push(sale);
-  localStorage.setItem('sales', JSON.stringify(sales));
-}
-
 function generatePixQR() {
   const total = cart.reduce((sum, i) => sum + i.price_current, 0);
-  const payload = generatePixPayload(PIX_KEY, total, RECEIVER_NAME, RECEIVER_CITY);
+  const payload = generatePixPayload("1150f286-83b6-4bba-a2ef-19ddf94cf48e", total, "KEI SAMPAIO", "CONTAGEM");
   const qrcodeDiv = document.getElementById("qrcode");
-  qrcodeDiv.innerHTML = "";
-  new QRCode(qrcodeDiv, { text: payload, width: 180, height: 180 });
+  if(qrcodeDiv) {
+    qrcodeDiv.innerHTML = "";
+    new QRCode(qrcodeDiv, { text: payload, width: 180, height: 180 });
+  }
 }
 
 function copyPixKey() {
   const total = cart.reduce((sum, i) => sum + i.price_current, 0);
-  const payload = generatePixPayload(PIX_KEY, total, RECEIVER_NAME, RECEIVER_CITY);
+  const payload = generatePixPayload("1150f286-83b6-4bba-a2ef-19ddf94cf48e", total, "KEI SAMPAIO", "CONTAGEM");
   navigator.clipboard.writeText(payload);
   const btn = document.getElementById('btn-copy');
-  btn.innerText = "✅ Código Copiado!";
-  setTimeout(() => btn.innerText = "📋 Copiar Código PIX", 2000);
+  if(btn) {
+    btn.innerText = "✅ Código Copiado!";
+    setTimeout(() => btn.innerText = "📋 Copiar Código PIX", 2000);
+  }
 }
 
 function sendWhatsAppReceipt() {
   const name = document.getElementById('user-name').value.trim();
   const total = cart.reduce((sum, i) => sum + i.price_current, 0);
   
-  // Filtrar para não enviar links Base64 (que quebram o link do WhatsApp por serem longos demais)
-  const items = cart.map(i => {
-    let imgPart = "";
-    const imgUrl = Array.isArray(i.img) ? i.img[0] : i.img;
-    if (imgUrl && !imgUrl.startsWith('data:')) {
-      imgPart = `%0A  _Foto:_ ${imgUrl}`;
-    }
-    return `• ${i.title}${imgPart}`;
-  }).join('%0A%0A');
-
-  const msg = `Olá! Meu nome é *${name}* e enviei o pagamento de R$ ${total.toFixed(2)} pelo meu pedido: %0A%0A${items}%0A%0AAqui está o comprovante! ✨`;
-  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
+  const items = cart.map(i => `• ${i.title}`).join('%0A');
+  const msg = `Olá! Meu nome é *${name}* e enviei o pagamento de R$ ${total.toFixed(2).replace('.',',')} pelo meu pedido: %0A%0A${items}%0A%0AAqui está o comprovante! ✨`;
+  window.open(`https://wa.me/5533920008206?text=${msg}`, '_blank');
 }
 
-// --- PIX Payload Generator (EMV QRCPS Robust) ---
 function generatePixPayload(key, amount, name, city) {
   const getTLV = (tag, value) => {
     const val = String(value);
     return tag + val.length.toString().padStart(2, '0') + val;
   };
 
-  // GUI + Key
-  const gui = getTLV('00', 'br.gov.bcb.pix');
-  const keyTlv = getTLV('01', key);
-  const merchantAccountInfo = getTLV('26', gui + keyTlv);
+  const merchantAccountInfo = getTLV('26', getTLV('00', 'br.gov.bcb.pix') + getTLV('01', key));
 
   const payload = [
-    getTLV('00', '01'), // Payload Format Indicator
+    getTLV('00', '01'),
     merchantAccountInfo,
-    getTLV('52', '0000'), // Merchant Category Code
-    getTLV('53', '986'), // Transaction Currency (BRL)
+    getTLV('52', '0000'),
+    getTLV('53', '986'),
     getTLV('54', amount.toFixed(2)),
-    getTLV('58', 'BR'), // Country Code
-    getTLV('59', name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").substring(0, 25)), 
-    getTLV('60', city.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").substring(0, 15)),
-    getTLV('62', getTLV('05', '***')), // Additional Data (Reference)
-    '6304' // CRC16 Placeholder
+    getTLV('58', 'BR'),
+    getTLV('59', name),
+    getTLV('60', city),
+    getTLV('62', getTLV('05', '***')),
+    '6304'
   ].join('');
 
   return payload + crc16(payload);
@@ -283,4 +274,44 @@ function crc16(str) {
     }
   }
   return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+}
+
+// --- Zoom Imagem ---
+let currentZoomedProductIdx = null;
+let currentZoomedImgIdx = 0;
+
+function zoomImage(pIdx, iIdx) {
+  currentZoomedProductIdx = pIdx;
+  currentZoomedImgIdx = iIdx;
+  const p = products[pIdx];
+  const images = Array.isArray(p.img) ? p.img : [p.img];
+  const zoomImg = document.getElementById('zoomed-image');
+  if(zoomImg) {
+      zoomImg.src = images[iIdx];
+      document.getElementById('image-modal').style.display = 'flex';
+  }
+}
+
+function closeImageZoom() {
+  document.getElementById('image-modal').style.display = 'none';
+}
+
+function nextZoomImg() { changeZoomImg(1); }
+function prevZoomImg() { changeZoomImg(-1); }
+
+function changeZoomImg(dir) {
+  const p = products[currentZoomedProductIdx];
+  const images = Array.isArray(p.img) ? p.img : [p.img];
+  currentZoomedImgIdx = (currentZoomedImgIdx + dir + images.length) % images.length;
+  document.getElementById('zoomed-image').src = images[currentZoomedImgIdx];
+}
+
+// --- Fechar Modais ao clicar fora ---
+window.onclick = function(event) {
+  const cartModal = document.getElementById('cart-modal');
+  const imageModal = document.getElementById('image-modal');
+  const pixModal = document.getElementById('pix-modal');
+  if (event.target == cartModal) toggleCartModal(false);
+  if (event.target == imageModal) closeImageZoom();
+  if (event.target == pixModal) togglePixModal(false);
 }
