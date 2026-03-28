@@ -1,8 +1,8 @@
 // --- Configurações Principais Kei Sampaio ---
 const PIX_KEY = "1150f286-83b6-4bba-a2ef-19ddf94cf48e";
-const WHATSAPP_NUMBER = "5533920008206";
 const RECEIVER_NAME = "KEI SAMPAIO";
-const RECEIVER_CITY = "VALADARES";
+const RECEIVER_CITY = "CONTAGEM";
+const WHATSAPP_NUMBER = "5533920008206";
 
 // Dados
 let rawProducts = JSON.parse(localStorage.getItem('products')) || [];
